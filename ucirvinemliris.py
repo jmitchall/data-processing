@@ -1,5 +1,7 @@
 import os
 import json
+import os
+import pickle
 import pandas as pd
 from ucimlrepo import fetch_ucirepo, list_available_datasets
 
@@ -34,7 +36,7 @@ def get_iris_data(id=53):  # default = 53 iris Data Set
     return data, X, y, metadata, variables
 
 
-def encodeLabels(data):
+def encode_labels(data):
     from sklearn.preprocessing import LabelEncoder
     # copy data before returning values
     data_internal = data.copy()
@@ -50,13 +52,13 @@ used when working with categorical data that doesn't have an inherent order.
 """
 
 
-def encodeOneHotLabels(data):
+def encode_one_hot_labels(data):
     """
     :param data:  data frame
     :return: data frame with one hot encoding
     """
     from sklearn.preprocessing import OneHotEncoder
-    enc = OneHotEncoder()
+    enc = OneHotEncoder(sparse_output=False)
     # copy data before returning values
     data_inside = data.copy()
     print('Data inside shape', data_inside.shape)
@@ -66,11 +68,11 @@ def encodeOneHotLabels(data):
         data_inside = enc.transform(data_inside).toarray()
     else:
         enc.fit(data_inside)
-        data_inside = enc.transform(data_inside).toarray()
+        data_inside = enc.transform(data_inside)
     return pd.DataFrame(data_inside)
 
 
-def encodeOneHotLabelsColumnInData(data, column):
+def encode_one_hot_labels_column_in_data(data, column):
     """
     :param data: data frame
     :param column: column name
@@ -78,7 +80,7 @@ def encodeOneHotLabelsColumnInData(data, column):
     """
     from sklearn.preprocessing import OneHotEncoder
     from sklearn.compose import ColumnTransformer
-    enc = OneHotEncoder()
+    enc = OneHotEncoder(sparse_output=False)
     # copy data before returning values
     data_inside = data.copy()
     print('Data inside shape', data_inside.shape)
@@ -99,46 +101,71 @@ def encodeOneHotLabelsColumnInData(data, column):
 
 # python main entry
 if __name__ == '__main__':
+    if not os.path.exists('iris_species.csv'):
     # check which datasets can be imported
-    list_available_datasets()
-    # fetch the dataset
-    data_frame, X, Y, metadata, variables = get_iris_data()
-    data_frame.to_csv('iris_species.csv', sep=",", index=False, header=False)
-    diagnostic_data = pd.read_csv('iris_species.csv', header=None)
-    print('X Columns', X.columns)
-    print('Y columns', Y.columns)
+        list_available_datasets()
+        # fetch the dataset
+        data_frame, X, Y, metadata, variables = get_iris_data()
+        data_frame.to_csv('iris_species.csv', sep=",", index=False, header=False)
+        variables.to_csv('iris_species_variables.csv', sep=",", index=False, header=False)
+        with open('iris_species_metadata.json', 'w') as jsonFile:
+            json.dump(metadata, jsonFile, indent=4, sort_keys=True)
+        with open('iris_species_X_columns', 'wb') as fp:
+            pickle.dump(X.columns, fp)
+        X_columns = X.columns
+        with open('iris_species_X_shape', 'wb') as fp:
+            pickle.dump(X.shape, fp)
+        X_shape = X.shape
+        with open('iris_species_Y_columns', 'wb') as fp:
+            pickle.dump(Y.columns, fp)
+        Y_columns = Y.columns
+        with open('iris_species_Y_shape', 'wb') as fp:
+            pickle.dump(Y.shape, fp)
+        Y_shape = Y.shape
+
+    iris_species_data = pd.read_csv('iris_species.csv', header=None)
+    with open('iris_species_X_columns', 'rb') as fp:
+        X_columns = pickle.load(fp)
+    with open('iris_species_Y_columns', 'rb') as fp:
+        Y_columns = pickle.load(fp)
+    print('X Columns', X_columns)
+    print('Y columns', Y_columns)
     with open('iris_species_metadata.json', 'w') as jsonFile:
         json.dump(metadata, jsonFile, indent=4, sort_keys=True)
 
     variables.to_csv('iris_species_variables.csv', sep=",", index=False, header=False)
 
-    X_Data = diagnostic_data.iloc[:, 0:diagnostic_data.shape[1] - 1]
-    Y_Data = diagnostic_data.iloc[:,diagnostic_data.shape[1] - 1].to_frame()
+    X_Data = iris_species_data.iloc[:, 0:iris_species_data.shape[1] - 1]
+    Y_Data = iris_species_data.iloc[:,iris_species_data.shape[1] - 1].to_frame()
     X_Data.columns = X.columns
     Y_Data.columns = Y.columns
     all_column_names = list(X.columns) + list(Y.columns)
-    diagnostic_data.columns = all_column_names
-    print('Diagnostic Data\n', diagnostic_data.head())
+    iris_species_data.columns = all_column_names
+    print('iris species Data\n', iris_species_data.head())
 
-    print('X shape', X.shape, 'read X data', X_Data.shape)
+    with open('iris_species_X_shape', 'rb') as fp:
+        X_shape = pickle.load(fp)
+    print('X shape', X_shape, 'read X data', X_Data.shape)
     print('X Data\n', X_Data.head())
     print('X Description\n', X_Data.describe())
 
-    print('Y shape', Y.shape, 'read Y data', Y_Data.shape)
+    with open('iris_species_Y_shape', 'rb') as fp:
+        Y_shape = pickle.load(fp)
+    print('Y shape', Y_shape, 'read Y data', Y_Data.shape)
     print('Y Data\n', Y_Data)
     # get distinct values of Y data
     print('Y Data distinct values\n', Y_Data.value_counts())
 
     # encode the labels
-    Y_Num_Label = encodeLabels(Y_Data)
+    Y_Num_Label = encode_labels(Y_Data)
     print('Y Data encoded\n', Y_Num_Label.head())
     print('Y Data distinct values encoded \n', Y_Num_Label.value_counts())
 
     # One hot encoding
-    Y_One_Hot_Label = encodeOneHotLabels(Y_Data)
+    Y_One_Hot_Label = encode_one_hot_labels(Y_Data)
     print('Y Data one hot encoded\n', Y_One_Hot_Label.head())
     print('Y Data distinct values of One hot encoded \n', Y_One_Hot_Label.value_counts())
 
     # One hot encoding for a column
-    expanded_one_hot_encoding = encodeOneHotLabelsColumnInData(diagnostic_data, 'class')
+    expanded_one_hot_encoding = encode_one_hot_labels_column_in_data(iris_species_data, 'class')
     print('Expanded one hot encoding\n', expanded_one_hot_encoding.head())
