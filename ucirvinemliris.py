@@ -1,11 +1,10 @@
-import os
 import json
 import os
 import pickle
+
 import pandas as pd
 from ucimlrepo import fetch_ucirepo, list_available_datasets
 
-http_proxy = 'http://http.proxy.fmr.com:8000/'
 http_proxy = 'http://http.proxy.fmr.com:8000/'
 https_proxy = 'http://http.proxy.fmr.com:8000/'
 no_proxy = '169.254.169.254'
@@ -17,23 +16,23 @@ os.environ['HTTPS_PROXY'] = https_proxy
 
 
 # fetch dataset
-def fetch_uc_irvine_ml_data(id):
-    dataset = fetch_ucirepo(id=id)
+def fetch_uc_irvine_ml_data(id_arg):
+    dataset = fetch_ucirepo(id=id_arg)
     return dataset
 
 
-def get_iris_data(id=53):  # default = 53 iris Data Set
-    iris_species = fetch_uc_irvine_ml_data(id)
+def get_iris_data(iris_id=53):  # default = 53 iris Data Set
+    iris_species = fetch_uc_irvine_ml_data(iris_id)
     # data (as pandas dataframes)
-    X = iris_species.data.features.copy()
-    y = iris_species.data.targets.copy()
+    x_data = iris_species.data.features.copy()
+    y_data = iris_species.data.targets.copy()
     # metadata
-    metadata = iris_species.metadata
+    iris_meta_data = iris_species.metadata
     # variable information
-    variables = iris_species.variables
+    iris_variables = iris_species.variables
     # combine data and metadata
-    data = pd.concat([X, y], axis=1)
-    return data, X, y, metadata, variables
+    all_data = pd.concat([x_data, y_data], axis=1)
+    return all_data, x_data, y_data, iris_meta_data, iris_variables
 
 
 def encode_labels(data):
@@ -99,29 +98,44 @@ def encode_one_hot_labels_column_in_data(data, column):
     return return_value
 
 
-# python main entry
-if __name__ == '__main__':
+def download_from_uc_data():
+    data_frame = None
+    x = None
+    y = None
+    m_data = None
+    iris_var = None
+    x_columns = None
+    x_shape = None
+    y_columns = None
+    y_shape = None
     if not os.path.exists('iris_species.csv'):
-    # check which datasets can be imported
+        # check which datasets can be imported
         list_available_datasets()
         # fetch the dataset
-        data_frame, X, Y, metadata, variables = get_iris_data()
+        data_frame, x, y, m_data, iris_var = get_iris_data()
         data_frame.to_csv('iris_species.csv', sep=",", index=False, header=False)
-        variables.to_csv('iris_species_variables.csv', sep=",", index=False, header=False)
+        iris_var.to_csv('iris_species_variables.csv', sep=",", index=False, header=False)
         with open('iris_species_metadata.json', 'w') as jsonFile:
-            json.dump(metadata, jsonFile, indent=4, sort_keys=True)
-        with open('iris_species_X_columns', 'wb') as fp:
-            pickle.dump(X.columns, fp)
-        X_columns = X.columns
-        with open('iris_species_X_shape', 'wb') as fp:
-            pickle.dump(X.shape, fp)
-        X_shape = X.shape
-        with open('iris_species_Y_columns', 'wb') as fp:
-            pickle.dump(Y.columns, fp)
-        Y_columns = Y.columns
-        with open('iris_species_Y_shape', 'wb') as fp:
-            pickle.dump(Y.shape, fp)
-        Y_shape = Y.shape
+            json.dump(m_data, jsonFile, indent=4, sort_keys=True)
+        with open('iris_species_X_columns', 'wb') as adult_x_fp:
+            pickle.dump(x.columns, adult_x_fp)
+        x_columns = x.columns
+        with open('iris_species_X_shape', 'wb') as adult_shape_fp:
+            pickle.dump(x.shape, adult_shape_fp)
+        x_shape = x.shape
+        with open('iris_species_Y_columns', 'wb') as adult_y_fp:
+            pickle.dump(y.columns, adult_y_fp)
+        y_columns = y.columns
+        with open('iris_species_Y_shape', 'wb') as adult_fp:
+            pickle.dump(y.shape, adult_fp)
+        y_shape = y.shape
+
+    return data_frame, x, y, m_data, iris_var, x_columns, x_shape, y_columns, y_shape
+
+
+# python main entry
+if __name__ == '__main__':
+    download_from_uc_data()
 
     iris_species_data = pd.read_csv('iris_species.csv', header=None)
     with open('iris_species_X_columns', 'rb') as fp:
@@ -130,16 +144,12 @@ if __name__ == '__main__':
         Y_columns = pickle.load(fp)
     print('X Columns', X_columns)
     print('Y columns', Y_columns)
-    with open('iris_species_metadata.json', 'w') as jsonFile:
-        json.dump(metadata, jsonFile, indent=4, sort_keys=True)
-
-    variables.to_csv('iris_species_variables.csv', sep=",", index=False, header=False)
 
     X_Data = iris_species_data.iloc[:, 0:iris_species_data.shape[1] - 1]
-    Y_Data = iris_species_data.iloc[:,iris_species_data.shape[1] - 1].to_frame()
-    X_Data.columns = X.columns
-    Y_Data.columns = Y.columns
-    all_column_names = list(X.columns) + list(Y.columns)
+    Y_Data = iris_species_data.iloc[:, iris_species_data.shape[1] - 1].to_frame()
+    X_Data.columns = X_columns
+    Y_Data.columns = Y_columns
+    all_column_names = list(X_columns) + list(Y_columns)
     iris_species_data.columns = all_column_names
     print('iris species Data\n', iris_species_data.head())
 
