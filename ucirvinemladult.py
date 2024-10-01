@@ -39,7 +39,7 @@ def get_adult_data(id_value=2):  # default = 2 Adult Data Set
     return all_data, x_data, y_data, meta_data, adult_variables
 
 
-def encode_binary_column_data(df, column_name, column_value_map):
+def encode_numeric_column_data(df, column_name, column_value_map):
     """
     :param df: data frame
     :param column_name: column name
@@ -48,7 +48,7 @@ def encode_binary_column_data(df, column_name, column_value_map):
     """
     df_data = df.copy()
     df_data[column_name] = df_data[column_name].map(column_value_map)
-    df_data[column_name] = df_data[column_name].apply(lambda x: format(x, 'b'))
+    df_data[column_name] = df_data[column_name].apply(lambda x: pd.to_numeric(x, errors='coerce'))
     return df_data
 
 
@@ -207,7 +207,41 @@ ENCODING = (COUNT_OF_TARGET_1) / (TOTAL_OCCURRENCES_OF_CATEGORY)
 """
 
 
-def encode_target_encoder(data, target_column_name, column_name):
+def encode_labels(data, specific_columns=None):
+    from sklearn.preprocessing import LabelEncoder
+    # copy data before returning values
+    data_internal = data.copy()
+    if not specific_columns:
+        specific_columns = list(data_internal.columns)
+    le = LabelEncoder()
+    for col in specific_columns:
+        data_internal[col] = le.fit_transform(data[col])
+    # # for each column in return_value get the distinct values
+    # for col in data_internal.columns:
+    #     print( col, 'distinct values', data_internal[col].value_counts())
+    return data_internal
+
+
+def encode_target_means(data, target_column_name, specific_columns=None):
+    """
+    :param data: data frame
+    :param target_column_name: target column name
+    :param specific_columns: column names
+    :return: data frame with target encoding
+    """
+    from category_encoders import TargetEncoder
+    data_internal = data.copy()
+    if not specific_columns:
+        specific_columns = list(data_internal.columns)
+    if target_column_name in specific_columns:
+        specific_columns.remove(target_column_name)
+    encoder = TargetEncoder()
+    for col in specific_columns:
+        data_internal[col] = encoder.fit_transform(data_internal[col], data_internal[target_column_name])
+    return data_internal
+
+
+def encode_target_mean(data, target_column_name, column_name):
     """
     :param data: data frame
     :param target_column_name: target column name
@@ -215,44 +249,12 @@ def encode_target_encoder(data, target_column_name, column_name):
     :return: data frame with target encoding
     """
     data_internal = data.copy()
+
     from category_encoders import TargetEncoder
     encoder = TargetEncoder()
-    data_internal[column_name + '_encoded_sklearn'] = encoder.fit_transform(
-        data_internal[column_name], data_internal[target_column_name]
-    )
+    data_internal[target_column_name + '_encoded_sklearn'] = encoder.fit_transform(data_internal[column_name],
+                                                                                   data_internal[target_column_name])
     """
-    categories = data_internal[column_name].unique()
-    targets = data_internal[target_column_name].unique()
-    cat_list = []
-    for category in categories:
-        aux_dict = {}
-        aux_dict['category'] = category
-        aux_df = data_internal[data_internal[column_name] == category]
-        counts = aux_df[target_column_name].value_counts()
-        aux_dict['count'] = sum(counts)
-        for t in targets:
-            aux_dict['target_' + str(t)] = counts[t]
-        cat_list.append(aux_dict)
-    cat_list = pd.DataFrame(cat_list)
-    cat_list[column_name+'_encoded_dumb'] = cat_list['target_1'] / cat_list['count']
-
-    Since the target of interest is the value “1”, this probability is actually the mean of the target, given a 
-    category. This is the reason why this method of target encoding is also called “mean” encoding.
-    
-    We can calculate this mean with a simple aggregation, then:
-  
-    stats = data_internal[target_column_name].groupby(data_internal[column_name]).agg(['count', 'mean'])
-    data_internal[column_name + '_encoded'] = data_internal[column_name].map(stats['mean'])
-    smoothing_factor = 1.0 # The f of the smoothing factor equation 
-    min_samples_leaf = 1 # The k of the smoothing factor equation
-    
-    import numpy as np
-    prior = data_internal[target_column_name].mean()
-    smooth = 1 / (1 + np.exp(-(stats['count'] - min_samples_leaf) / smoothing_factor))
-    smoothing = prior * (1 - smooth) + stats['mean'] * smooth
-    encoded = pd.Series(smoothing, name = column_name + '_encoded_complete')
-    data_internal = data_internal.join(encoded, on = column_name)
-
     https://towardsdatascience.com/dealing-with-categorical-variables-by-using-target-encoder-a0f1733a4c69
     
     One really important effect is the Target Leakage. By using the probability of the target to encode the features 
@@ -263,6 +265,48 @@ def encode_target_encoder(data, target_column_name, column_name):
     Even if the mean is a good summary, we train models in a fraction of the data. The mean of this fraction may 
     not be the mean of the full population (remember the central limit theorem?), so the encoding might not be correct. 
     If the sample is different enough from the population, the model may even overfit the training data.
+    
+    categories = data_internal[column_name].unique()
+    targets = data_internal[target_column_name].unique()
+    cat_list = []
+    for cat in categories:
+        aux_dict = {}
+        aux_dict[column_name] = cat
+        aux_df = data_internal[data_internal[column_name] == cat]
+        counts = aux_df[target_column_name].value_counts()
+        aux_dict['count'] = sum(counts)
+        for t in targets:
+            if t not in counts:
+                counts[t] = 0
+            aux_dict['target_' + str(t)] = counts[t]
+        cat_list.append(aux_dict)
+    cat_list = pd.DataFrame(cat_list)
+    cat_list['mean'] = cat_list['target_'+str(target_value)] / cat_list['count']
+    cat_list = cat_list[[column_name, 'mean', 'count']]
+    print(cat_list)
+    # replace the values  in data_internal[column_name] with the 'mean'  value of cat_list[column_name]
+    data_internal = data_internal.merge(cat_list, on=column_name, how='left')
+    data_internal.drop(column_name, axis=1, inplace=True)
+    data_internal.rename(columns={'mean': column_name+'_encoded'}, inplace=True)
+
+    Since the target of interest is the value “target_value”, this probability is actually the mean of the target, given a 
+    category. This is the reason why this method of target encoding is also called “mean” encoding.
+    
+    def smoother(mean, count, prior, smoothing_factor=1.0, min_samples_leaf=1):
+        import numpy as np
+        smooth = 1 / (1 + np.exp(-(count - min_samples_leaf) / smoothing_factor))
+        smoothing = prior * (1 - smooth) + mean * smooth
+        return smoothing
+
+
+    # convert all values of target_column_name to a numeric value
+    mean_of_all_binary_targets = data_internal[target_column_name].mean()
+
+    # create a Column  column_name + '_encoded_complete' with the smoothed values using the smoother function
+    data_internal[column_name + '_encoded_complete'] = data_internal.apply(lambda x: smoother(x[column_name+'_encoded'],
+    x['count'] , mean_of_all_binary_targets), axis=1)
+    data_internal.drop(column_name+'_encoded', axis=1, inplace=True)
+    date_internal = data_internal.drop('count', axis=1, inplace=True)
     """
     return data_internal
 
@@ -378,6 +422,7 @@ if __name__ == '__main__':
     print('X Columns', X_columns)
     print('Y columns', Y_columns)
     metadata = json.load(open('adult_metadata.json'))
+
     adult_data = pd.read_csv('adult.csv', header=None)
     X_Data = adult_data.iloc[:, 0:adult_data.shape[1] - 1]
     Y_Data = adult_data.iloc[:, adult_data.shape[1] - 1].to_frame()
@@ -385,6 +430,16 @@ if __name__ == '__main__':
     Y_Data.columns = Y_columns
     all_column_names = list(X_columns) + list(Y_columns)
     adult_data.columns = all_column_names
+
+    #  -------------Y_Data Processing
+
+    Y_Data = Y_Data.map(lambda x: x.strip().replace('K.', 'K') if isinstance(x, str) else x)
+    Y_Data = encode_numeric_column_data(Y_Data, 'income', {'<=50K': 0, '>50K': 1})
+    # get distinct values of Y data
+    print('Y Data distinct values\n', Y_Data.value_counts())
+    Y_Data.to_csv('adult_Y_data_encode_binary.csv', sep=",", index=False, header=True)
+
+   #  -------------X_Data Processing
     with open('adult_X_shape', 'rb') as fp:
         X_shape = pickle.load(fp)
     print('X Shape', X_shape)
@@ -402,9 +457,17 @@ if __name__ == '__main__':
     X_Data['workclass'] = X_Data['workclass'].apply(
         lambda x: x.strip().replace('?', 'unknown') if isinstance(x, str) else x)
 
+    # ----------------------- ENCODING-------------------------------------------
+    all_Data_df = pd.concat([X_Data, Y_Data], axis=1)
+    all_Data_df = encode_target_means(all_Data_df, 'income',
+                                      ['workclass', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
+                                       'native-country'])
+    all_Data_df.to_csv('adult_all_data_target_encoded.csv', sep=",", index=False, header=True)
+
     X_Data.drop(['education'], axis=1, inplace=True)
     X_Data = encode_labels(X_Data, ['workclass', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
                                     'native-country'])
+
     X_Data.to_csv('adult_X_columns_label_encoded.csv', sep=",", index=False, header=True)
 
     X_Data = encode_one_hot_labels_column_in_data(X_Data,
@@ -415,15 +478,10 @@ if __name__ == '__main__':
     X_Data.to_csv('adult_X_data_one_hot_encoded.csv', sep=",", index=False, header=True)
     X_Data_sparse.to_csv('adult_X_sparse_one_hot_encoded.csv', sep=",", index=False, header=True)
 
-    Y_Data = Y_Data.map(lambda x: x.strip().replace('K.', 'K') if isinstance(x, str) else x)
-    Y_Data = encode_binary_column_data(Y_Data, 'income', {'<=50K': 0, '>50K': 1})
-
     Y_Data_sparse = convert_to_sparse_pandas(Y_Data, [])
-    Y_Data_csr = data_frame_to_scipy_sparse_matrix(Y_Data)
-    Y_Data.to_csv('adult_Y_data_one_hot_encoded.csv', sep=",", index=False, header=True)
     Y_Data_sparse.to_csv('adult_Y_sparse_one_hot_encoded.csv', sep=",", index=False, header=True)
-    # get distinct values of Y data
-    print('Y Data distinct values\n', Y_Data.value_counts())
+    Y_Data_csr = data_frame_to_scipy_sparse_matrix(Y_Data)
+
     print('X Data takes up', get_memory_usage_of_data_frame(X_Data))
     print('Y Data takes up', get_memory_usage_of_data_frame(Y_Data))
     print('X sparse Data takes up', get_memory_usage_of_data_frame(X_Data_sparse))
@@ -455,4 +513,3 @@ if __name__ == '__main__':
     #     duration = round(end - start, 2)
     #     print("Training: " + str(duration) + " secs")
     #     print("\n")
-
