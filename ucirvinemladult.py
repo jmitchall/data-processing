@@ -459,6 +459,8 @@ if __name__ == '__main__':
 
     # ----------------------- ENCODING-------------------------------------------
     all_Data_df = pd.concat([X_Data, Y_Data], axis=1)
+    all_Data_df.to_csv('adult_all_data_processed.csv', sep=",", index=False, header=True)
+
     all_Data_df = encode_target_means(all_Data_df, 'income',
                                       ['workclass', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
                                        'native-country'])
@@ -481,6 +483,11 @@ if __name__ == '__main__':
     Y_Data_sparse = convert_to_sparse_pandas(Y_Data, [])
     Y_Data_sparse.to_csv('adult_Y_sparse_one_hot_encoded.csv', sep=",", index=False, header=True)
     Y_Data_csr = data_frame_to_scipy_sparse_matrix(Y_Data)
+    # output scipy sparse matrix to a file
+    from scipy import sparse
+    sparse.save_npz('adult_Y_sparse_one_hot_encoded.npz', Y_Data_csr)
+    sparse.save_npz('adult_X_sparse_one_hot_encoded.npz', X_Data_csr)
+
 
     print('X Data takes up', get_memory_usage_of_data_frame(X_Data))
     print('Y Data takes up', get_memory_usage_of_data_frame(Y_Data))
