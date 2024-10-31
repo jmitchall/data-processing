@@ -5,16 +5,6 @@ import pickle
 import pandas as pd
 from ucimlrepo import fetch_ucirepo, list_available_datasets
 
-http_proxy = 'http://http.proxy.fmr.com:8000/'
-https_proxy = 'http://http.proxy.fmr.com:8000/'
-no_proxy = '169.254.169.254'
-os.environ['http_proxy'] = http_proxy
-os.environ['https_proxy'] = https_proxy
-os.environ['no_proxy'] = no_proxy
-os.environ['HTTP_PROXY'] = http_proxy
-os.environ['HTTPS_PROXY'] = https_proxy
-
-
 # fetch dataset
 def fetch_uc_irvine_ml_data(id_arg):
     dataset = fetch_ucirepo(id=id_arg)
