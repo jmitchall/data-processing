@@ -329,6 +329,19 @@ def convert_to_sparse_pandas(df, exclude_columns):
         df[columnName] = SparseArray(columnData.values, dtype='uint8')
     return df
 
+def is_sparse_dataframe(data_df):
+    """
+    Checks if the data frame is a sparse data frame
+    :param data_df: pandas data frame
+    :return: boolean
+    """
+    # if data_df is a csr_matrix return False
+    if hasattr(data_df, 'data'):
+        return False
+
+    # return true if any data_df[col] is a pandas.arrays.SparseArray
+    return any(isinstance(data_df[col].dtype, pd.SparseDtype) for col in data_df.columns)
+
 
 def data_frame_to_scipy_sparse_matrix(df):
     """
@@ -472,6 +485,8 @@ if __name__ == '__main__':
 
     Y_Data_sparse = convert_to_sparse_pandas(Y_Data, [])
     Y_Data_sparse.to_csv('adult_Y_sparse_one_hot_encoded.csv', sep=",", index=False, header=True)
+
+
     Y_Data_csr = data_frame_to_scipy_sparse_matrix(Y_Data)
     # output scipy sparse matrix to a file
     from scipy import sparse
@@ -479,12 +494,12 @@ if __name__ == '__main__':
     sparse.save_npz('adult_X_sparse_one_hot_encoded.npz', X_Data_csr)
 
 
-    print('X Data takes up', get_memory_usage_of_data_frame(X_Data))
-    print('Y Data takes up', get_memory_usage_of_data_frame(Y_Data))
-    print('X sparse Data takes up', get_memory_usage_of_data_frame(X_Data_sparse))
-    print('Y sparse Data takes up', get_memory_usage_of_data_frame(Y_Data_sparse))
-    print('X csr Data takes up', get_csr_memory_usage(X_Data_csr))
-    print('Y csr Data takes up', get_csr_memory_usage(Y_Data_csr))
+    print('X Data takes up', get_memory_usage_of_data_frame(X_Data), "is_sparse" , is_sparse_dataframe(X_Data))
+    print('Y Data takes up', get_memory_usage_of_data_frame(Y_Data), "is_sparse" , is_sparse_dataframe(Y_Data))
+    print('X sparse Data takes up', get_memory_usage_of_data_frame(X_Data_sparse), "is_sparse" , is_sparse_dataframe(X_Data_sparse))
+    print('Y sparse Data takes up', get_memory_usage_of_data_frame(Y_Data_sparse), "is_sparse" , is_sparse_dataframe(Y_Data_sparse))
+    print('X csr Data takes up', get_csr_memory_usage(X_Data_csr), "is_sparse" , is_sparse_dataframe(X_Data_csr))
+    print('Y csr Data takes up', get_csr_memory_usage(Y_Data_csr), "is_sparse" , is_sparse_dataframe(Y_Data_csr))
 
     # todo : LOOK INTO
     #  https://stephenleo.github.io/data-science-blog/data-science-blog/ml/feature_engineering.html#dirty-cat
